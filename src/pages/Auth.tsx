@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,16 +6,113 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, User, GraduationCap, Mail, Lock, Eye, EyeOff } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<"student" | "instructor" | null>(null);
   const [activeTab, setActiveTab] = useState("login");
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: ''
+  });
+
+  const { signUp, signIn, user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
   const handleRoleSelect = (role: "student" | "instructor") => {
     setSelectedRole(role);
     setActiveTab("register");
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const { error } = await signIn(formData.email, formData.password);
+      
+      if (error) {
+        toast({
+          title: "Error al iniciar sesión",
+          description: error.message === "Invalid login credentials" 
+            ? "Credenciales incorrectas. Verifica tu email y contraseña."
+            : error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "¡Bienvenido!",
+          description: "Has iniciado sesión correctamente.",
+        });
+        navigate('/');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Ocurrió un error inesperado. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRole) return;
+    
+    setLoading(true);
+
+    try {
+      const { error } = await signUp(formData.email, formData.password, {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: selectedRole
+      });
+      
+      if (error) {
+        toast({
+          title: "Error al registrarse",
+          description: error.message === "User already registered"
+            ? "Este email ya está registrado. Intenta iniciar sesión."
+            : error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "¡Registro exitoso!",
+          description: "Verifica tu email para activar tu cuenta.",
+        });
+        setActiveTab("login");
+        setFormData({ email: '', password: '', firstName: '', lastName: '' });
+        setSelectedRole(null);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Ocurrió un error inesperado. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -54,52 +151,66 @@ const Auth = () => {
               </TabsList>
 
               <TabsContent value="login" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Correo electrónico</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="tu@email.com"
-                      className="pl-10"
-                    />
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Correo electrónico</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="tu@email.com"
+                        className="pl-10"
+                        value={formData.email}
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      className="pl-10 pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Contraseña</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="pl-10 pr-10"
+                        value={formData.password}
+                        onChange={(e) => handleInputChange('password', e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex items-center justify-between text-sm">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" className="rounded" />
-                    <span>Recordarme</span>
-                  </label>
-                  <Link to="/recuperar-password" className="text-primary hover:underline">
-                    ¿Olvidaste tu contraseña?
-                  </Link>
-                </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input type="checkbox" className="rounded" />
+                      <span>Recordarme</span>
+                    </label>
+                    <Link to="/recuperar-password" className="text-primary hover:underline">
+                      ¿Olvidaste tu contraseña?
+                    </Link>
+                  </div>
 
-                <Button variant="hero" className="w-full" size="lg">
-                  Iniciar Sesión
-                </Button>
+                  <Button 
+                    variant="hero" 
+                    className="w-full" 
+                    size="lg"
+                    type="submit"
+                    disabled={loading}
+                  >
+                    {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
+                  </Button>
+                </form>
 
                 <div className="text-center text-sm text-muted-foreground">
                   ¿No tienes cuenta?{" "}
@@ -177,12 +288,13 @@ const Auth = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <form onSubmit={handleRegister} className="space-y-4">
                     <div className="text-center mb-4">
                       <Badge variant={selectedRole === "student" ? "default" : "secondary"} className="mb-2">
                         {selectedRole === "student" ? "Cuenta de Estudiante" : "Cuenta de Instructor"}
                       </Badge>
                       <button
+                        type="button"
                         onClick={() => setSelectedRole(null)}
                         className="text-sm text-muted-foreground hover:text-primary"
                       >
@@ -193,11 +305,23 @@ const Auth = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="firstName">Nombre</Label>
-                        <Input id="firstName" placeholder="Juan" />
+                        <Input 
+                          id="firstName" 
+                          placeholder="Juan"
+                          value={formData.firstName}
+                          onChange={(e) => handleInputChange('firstName', e.target.value)}
+                          required
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">Apellido</Label>
-                        <Input id="lastName" placeholder="Pérez" />
+                        <Input 
+                          id="lastName" 
+                          placeholder="Pérez"
+                          value={formData.lastName}
+                          onChange={(e) => handleInputChange('lastName', e.target.value)}
+                          required
+                        />
                       </div>
                     </div>
 
@@ -210,6 +334,9 @@ const Auth = () => {
                           type="email"
                           placeholder="tu@email.com"
                           className="pl-10"
+                          value={formData.email}
+                          onChange={(e) => handleInputChange('email', e.target.value)}
+                          required
                         />
                       </div>
                     </div>
@@ -223,6 +350,10 @@ const Auth = () => {
                           type={showPassword ? "text" : "password"}
                           placeholder="••••••••"
                           className="pl-10 pr-10"
+                          value={formData.password}
+                          onChange={(e) => handleInputChange('password', e.target.value)}
+                          required
+                          minLength={8}
                         />
                         <button
                           type="button"
@@ -238,7 +369,7 @@ const Auth = () => {
                     </div>
 
                     <div className="flex items-start space-x-2">
-                      <input type="checkbox" id="terms" className="mt-1" />
+                      <input type="checkbox" id="terms" className="mt-1" required />
                       <label htmlFor="terms" className="text-sm text-muted-foreground">
                         Acepto los{" "}
                         <Link to="/terminos" className="text-primary hover:underline">
@@ -255,8 +386,13 @@ const Auth = () => {
                       variant={selectedRole === "student" ? "hero" : "secondary"} 
                       className="w-full" 
                       size="lg"
+                      type="submit"
+                      disabled={loading}
                     >
-                      Crear Cuenta {selectedRole === "student" ? "de Estudiante" : "de Instructor"}
+                      {loading 
+                        ? "Creando cuenta..." 
+                        : `Crear Cuenta ${selectedRole === "student" ? "de Estudiante" : "de Instructor"}`
+                      }
                     </Button>
 
                     <div className="text-center text-sm text-muted-foreground">
@@ -268,12 +404,12 @@ const Auth = () => {
                         Inicia sesión aquí
                       </button>
                     </div>
-                  </div>
+                  </form>
                 )}
               </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+              </Tabs>
+            </CardContent>
+          </Card>
 
         <div className="text-center mt-8 text-sm text-muted-foreground">
           Al continuar, aceptas nuestros{" "}
